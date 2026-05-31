@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Buchführungstrainer Autohaus CSBWV</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="trainer-shell">
+      <header class="hero-bar">
+        Buchführungstrainer Autohaus CSBWV
+      </header>
+
+      <section class="trainer-panel" aria-label="Buchungstrainer">
+        <section class="case-section">
+          <p id="taskMeta" class="task-meta">Aufgabe 1</p>
+          <h1>Der Geschäftsfall</h1>
+          <p id="taskText" class="task-text"></p>
+          <div id="hintBox" class="hint-box" hidden></div>
+        </section>
+
+        <section class="journal-section" aria-label="Grundbuch">
+          <h2>Grundbuch</h2>
+          <form id="entryForm" class="booking-form">
+            <div id="bookingGroups" class="booking-groups"></div>
+          </form>
+        </section>
+
+        <div class="action-row">
+          <button class="primary-button" id="checkButton" type="button">Kontrollieren</button>
+          <button class="primary-button" id="nextButton" type="button">Neue Aufgabe</button>
+          <button class="primary-button" id="solutionButton" type="button">Lösung</button>
+          <button class="secondary-button" id="hintButton" type="button">Tipp</button>
+        </div>
+
+        <div id="feedback" class="feedback" aria-live="polite"></div>
+      </section>
+
+      <footer class="stats-bar" aria-live="polite">
+        <strong>Statistik - aktuell:</strong>
+        <span>Aufgaben: <b id="taskCount">0</b></span>
+        <span>richtig: <b id="rightCount">0</b></span>
+        <span>falsch: <b id="wrongCount">0</b></span>
+      </footer>
+    </main>
+
+    <template id="accountInputTemplate">
+      <input class="account-input" list="accountOptions" placeholder="Kontonummer oder Konto" autocomplete="off">
+    </template>
+
+    <template id="amountInputTemplate">
+      <label class="money-field">
+        <input class="amount-input" inputmode="decimal" placeholder="0,00">
+        <span>EUR</span>
+      </label>
+    </template>
+
+    <datalist id="accountOptions"></datalist>
+
+    <script src="script.js"></script>
+  </body>
+</html>
