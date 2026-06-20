@@ -83,11 +83,28 @@ function normalizeEntry(entry) {
 }
 
 function parseAmount(value) {
-  const normalized = String(value || "")
-    .replace(/\s/g, "")
-    .replace(/\./g, "")
-    .replace(",", ".");
+  const raw = String(value || "")
+    .trim()
+    .replace(/[€\s']/g, "");
+  if (!raw) {
+    return null;
+  }
+
+  let normalized = raw;
+  if (normalized.includes(",")) {
+    normalized = normalized.replace(/\./g, "").replace(",", ".");
+  } else if (normalized.includes(".")) {
+    const parts = normalized.split(".");
+    const lastPart = parts[parts.length - 1];
+    normalized = parts.length === 2 && lastPart.length <= 2
+      ? normalized
+      : normalized.replace(/\./g, "");
+  }
+
   if (!normalized) {
+    return null;
+  }
+  if (!/^-?\d+(\.\d+)?$/.test(normalized)) {
     return null;
   }
   const amount = Number.parseFloat(normalized);
