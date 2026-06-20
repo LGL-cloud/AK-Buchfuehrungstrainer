@@ -7,6 +7,7 @@ const accounts = [
   ["0300", "Betriebs- und Geschäftsausstattung (Gebrauchsgüter)", "Aktiv"],
   ["3000", "Bestand Neuwagen", "Aktiv"],
   ["3100", "Bestand Gebrauchtwagen (regelbesteuert)", "Aktiv"],
+  ["3110", "Bestand Gebrauchtwagen (differenzbesteuert)", "Aktiv"],
   ["3200", "Bestand E-Bikes", "Aktiv"],
   ["3250", "Bestand Wallboxen", "Aktiv"],
   ["3300", "Bestand Teile", "Aktiv"],
@@ -18,8 +19,10 @@ const accounts = [
   ["2000", "Eigenkapital", "Passiv"],
   ["1800", "Darlehen", "Passiv"],
   ["1795", "Umsatzsteuer (Verbindlichkeit an das Finanzamt)", "Passiv"],
+  ["1796", "Umsatzsteuer auf Tauschteile", "Passiv"],
   ["1600", "Verbindlichkeiten aus Lieferungen und Leistungen", "Passiv"],
   ["7100", "VAK Neuwagen", "Aufwand"],
+  ["7110", "VAK Gebrauchtwagen (differenzbesteuert)", "Aufwand"],
   ["7150", "VAK Gebrauchtwagen (regelbesteuert)", "Aufwand"],
   ["7200", "VAK E-Bikes", "Aufwand"],
   ["7250", "VAK Wallboxen", "Aufwand"],
@@ -35,9 +38,12 @@ const accounts = [
   ["6800", "sonstige betriebliche Aufwendungen", "Aufwand"],
   ["8000", "Erlöse Neuwagen", "Ertrag"],
   ["8050", "Erlöse Gebrauchtwagen (regelbesteuert)", "Ertrag"],
+  ["8110", "Erlöse Gebrauchtwagen (differenzbesteuert)", "Ertrag"],
+  ["8111", "Mehrerlöse Differenzbesteuerung", "Ertrag"],
   ["8200", "Erlöse E-Bikes", "Ertrag"],
   ["8250", "Erlöse Wallboxen", "Ertrag"],
   ["8300", "Erlöse Teile", "Ertrag"],
+  ["8310", "Erlöse Teile durch die Werkstatt", "Ertrag"],
   ["8400", "Erlöse Solaranlagen", "Ertrag"],
   ["8500", "Lohnerlöse Werkstatt", "Ertrag"],
   ["8600", "sonstige betriebliche Erträge", "Ertrag"],
@@ -48,6 +54,7 @@ const accounts = [
 const state = {
   taskNumber: 0,
   currentTask: null,
+  currentModule: "standard",
   checkedCurrentTask: false,
   stats: {
     checked: 0,
@@ -64,6 +71,7 @@ const els = {
   amountTemplate: document.querySelector("#amountInputTemplate"),
   accountOptions: document.querySelector("#accountOptions"),
   bookingGroups: document.querySelector("#bookingGroups"),
+  moduleButtons: [...document.querySelectorAll("[data-module]")],
   checkButton: document.querySelector("#checkButton"),
   nextButton: document.querySelector("#nextButton"),
   solutionButton: document.querySelector("#solutionButton"),
@@ -99,6 +107,41 @@ const randomTaskTemplates = [
   randomInterestRevenue
 ];
 
+const specialTaskTemplates = [
+  randomPurchaseDiscountPayment,
+  randomSalesDiscountPayment,
+  randomMarginTaxUsedCarSale,
+  randomMarginTaxUsedCarPurchase,
+  randomExchangePartSale
+];
+
+const moduleConfigs = {
+  standard: {
+    label: "Grundfälle",
+    templates: randomTaskTemplates
+  },
+  special: {
+    label: "Sonderfälle",
+    templates: specialTaskTemplates
+  },
+  discountPurchase: {
+    label: "Skonto Einkauf",
+    templates: [randomPurchaseDiscountPayment]
+  },
+  discountSale: {
+    label: "Skonto Verkauf",
+    templates: [randomSalesDiscountPayment]
+  },
+  marginTax: {
+    label: "Differenzbesteuerung",
+    templates: [randomMarginTaxUsedCarSale, randomMarginTaxUsedCarPurchase]
+  },
+  exchangeParts: {
+    label: "Tauschteile",
+    templates: [randomExchangePartSale]
+  }
+};
+
 function line(side, account, amount) {
   return { side, account, amount };
 }
@@ -111,17 +154,39 @@ function init() {
 }
 
 function bindEvents() {
+  els.moduleButtons.forEach((button) => {
+    button.addEventListener("click", () => setModule(button.dataset.module));
+  });
   els.checkButton.addEventListener("click", checkAnswer);
   els.nextButton.addEventListener("click", showNextTask);
   els.solutionButton.addEventListener("click", showSolution);
   els.hintButton.addEventListener("click", toggleHint);
 }
 
+function setModule(moduleName) {
+  state.currentModule = moduleConfigs[moduleName] ? moduleName : "standard";
+  state.taskNumber = 0;
+  state.stats = {
+    checked: 0,
+    right: 0,
+    wrong: 0
+  };
+  els.moduleButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.module === state.currentModule);
+  });
+  updateStats();
+  showNextTask();
+}
+
+function currentModuleConfig() {
+  return moduleConfigs[state.currentModule] || moduleConfigs.standard;
+}
+
 function showNextTask() {
   state.taskNumber += 1;
   state.checkedCurrentTask = false;
   state.currentTask = createRandomTask();
-  els.taskMeta.textContent = `Aufgabe ${state.taskNumber}`;
+  els.taskMeta.textContent = `${currentModuleConfig().label} · Aufgabe ${state.taskNumber}`;
   els.taskText.textContent = state.currentTask.text;
   els.hintBox.hidden = true;
   els.hintBox.textContent = state.currentTask.hint;
@@ -130,7 +195,8 @@ function showNextTask() {
 }
 
 function createRandomTask() {
-  const task = pick(randomTaskTemplates)();
+  const templates = currentModuleConfig().templates;
+  const task = pick(templates)();
   return {
     ...task,
     id: `task-${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -214,27 +280,29 @@ function renderAccountOptions() {
 }
 
 function checkAnswer() {
-  if (state.checkedCurrentTask) {
-    showFeedback("Schon gewertet", "Diese Aufgabe wurde bereits gezählt. Bitte mit „Neue Aufgabe“ weitermachen.", "note");
-    return;
-  }
-
   const errors = validateBookings(readEntryBookings(), getTaskBookings());
+  const shouldCount = !state.checkedCurrentTask;
   state.checkedCurrentTask = true;
-  state.stats.checked += 1;
+
+  if (shouldCount) {
+    state.stats.checked += 1;
+  }
 
   if (errors.length === 0) {
-    state.stats.right += 1;
+    if (shouldCount) {
+      state.stats.right += 1;
+    }
     updateStats();
-    showFeedback("Richtig", "Der Buchungssatz stimmt.", "ok");
+    showFeedback("Richtig", shouldCount ? "Der Buchungssatz stimmt." : "Der Buchungssatz stimmt. Die Statistik wurde nicht erneut gezählt.", "ok");
     return;
   }
 
-  state.stats.wrong += 1;
+  if (shouldCount) {
+    state.stats.wrong += 1;
+  }
   updateStats();
-  showFeedback("Noch nicht richtig", errors.join(" "), "error");
+  showFeedback("Noch nicht richtig", `${errors.join(" ")} ${shouldCount ? "" : "Die Statistik wurde nicht erneut gezählt."}`, "error");
 }
-
 function validateBookings(userBookings, expectedBookings) {
   const errors = [];
 
@@ -248,36 +316,35 @@ function validateBookings(userBookings, expectedBookings) {
 
 function validateLines(userLines, solution, bookingTitle = "Buchungssatz") {
   const errors = [];
-  const filled = userLines.filter((entry) => entry.account || entry.amount);
+  const filled = userLines.filter((entry) => entry.account || entry.amount !== null);
   const normalizedUser = filled.map(normalizeEntry);
   const normalizedSolution = solution.map(normalizeEntry);
+  const usedUserIndexes = new Set();
 
-  if (filled.length !== solution.length) {
-    errors.push(`${bookingTitle}: Es werden ${solution.length} Buchungszeilen erwartet.`);
-  }
-
-  const userDebit = sumBySide(normalizedUser, "debit");
-  const userCredit = sumBySide(normalizedUser, "credit");
-  if (Math.abs(userDebit - userCredit) > 0.005) {
-    errors.push(`${bookingTitle}: Soll (${formatAmount(userDebit)} EUR) und Haben (${formatAmount(userCredit)} EUR) sind nicht ausgeglichen.`);
+  const unknownAccounts = normalizedUser.filter((entry) => entry.account && !findAccount(entry.account));
+  if (unknownAccounts.length > 0) {
+    errors.push(`${bookingTitle}: Mindestens eine Kontonummer ist nicht im Kontenplan enthalten.`);
   }
 
   normalizedSolution.forEach((expected) => {
-    const match = normalizedUser.find((entry) => (
+    const matchIndex = normalizedUser.findIndex((entry, index) => (
+      !usedUserIndexes.has(index) &&
       entry.side === expected.side &&
       entry.account === expected.account &&
-      Math.abs(entry.amount - expected.amount) < 0.005
+      amountsEqual(entry.amount, expected.amount)
     ));
 
-    if (!match) {
+    if (matchIndex >= 0) {
+      usedUserIndexes.add(matchIndex);
+    } else {
       const side = expected.side === "debit" ? "Soll" : "Haben";
       errors.push(`${bookingTitle}: ${side}: ${accountLabel(expected.account)} mit ${formatAmount(expected.amount)} EUR fehlt oder ist falsch.`);
     }
   });
 
-  const unknownAccounts = normalizedUser.filter((entry) => entry.account && !findAccount(entry.account));
-  if (unknownAccounts.length > 0) {
-    errors.push(`${bookingTitle}: Mindestens eine Kontonummer ist nicht im Kontenplan enthalten.`);
+  const extraLines = normalizedUser.filter((entry, index) => !usedUserIndexes.has(index) && (entry.account || entry.amount !== null));
+  if (extraLines.length > 0) {
+    errors.push(`${bookingTitle}: Es ist mindestens eine zusätzliche oder falsch ausgefüllte Zeile vorhanden.`);
   }
 
   return errors;
@@ -305,7 +372,7 @@ function normalizeEntry(entry) {
   return {
     side: entry.side,
     account: extractAccountCode(entry.account),
-    amount: Number(entry.amount || 0)
+    amount: entry.amount === null ? null : Number(entry.amount)
   };
 }
 
@@ -405,6 +472,131 @@ function purchaseToStock({ item, stock, min, max, step }) {
       line("debit", stock, amount.net),
       line("debit", "1570", amount.tax),
       line("credit", "1600", amount.gross)
+    ]
+  };
+}
+
+function purchaseDiscountPayment({ item, stock, min, max, step, discountRate }) {
+  const amount = taxableAmount(randomAmount(min, max, step));
+  const discountGross = money(amount.gross * discountRate);
+  const discountNet = money(discountGross / (1 + VAT_RATE));
+  const discountTax = money(discountGross - discountNet);
+  const bankPayment = money(amount.gross - discountGross);
+  const discountPercent = formatPercent(discountRate);
+
+  return {
+    text: `Wir begleichen eine bereits gebuchte Eingangsrechnung für ${item} per Banküberweisung. Rechnungsbetrag: ${formatAmount(amount.gross)} EUR brutto. Es werden ${discountPercent} Skonto abgezogen. Buchen Sie die Zahlung mit Skonto im Einkauf. Das Skonto wird direkt über das Bestandskonto korrigiert.`,
+    hint: "Beim Skonto im Einkauf wird kein Unterkonto Lieferantenskonto verwendet. Die Verbindlichkeit wird vollständig ausgebucht. Im Haben stehen Bank, das passende Bestandskonto und die Vorsteuerkorrektur.",
+    solution: [
+      line("debit", "1600", amount.gross),
+      line("credit", "1200", bankPayment),
+      line("credit", stock, discountNet),
+      line("credit", "1570", discountTax)
+    ]
+  };
+}
+
+function salesDiscountPayment({ item, revenue, min, max, step, discountRate }) {
+  const amount = taxableAmount(randomAmount(min, max, step));
+  const discountGross = money(amount.gross * discountRate);
+  const discountNet = money(discountGross / (1 + VAT_RATE));
+  const discountTax = money(discountGross - discountNet);
+  const bankReceipt = money(amount.gross - discountGross);
+  const discountPercent = formatPercent(discountRate);
+
+  return {
+    text: `Ein Kunde begleicht eine bereits gebuchte Ausgangsrechnung für ${item} per Banküberweisung. Rechnungsbetrag: ${formatAmount(amount.gross)} EUR brutto. Der Kunde zieht ${discountPercent} Skonto ab. Buchen Sie den Zahlungseingang mit Skonto im Verkauf. Das Skonto wird direkt über das Erlöskonto korrigiert.`,
+    hint: "Beim Skonto im Verkauf wird die Forderung vollständig ausgebucht. Im Soll stehen Bank, das passende Erlöskonto als Erlöskorrektur und die Umsatzsteuerkorrektur.",
+    solution: [
+      line("debit", "1200", bankReceipt),
+      line("debit", revenue, discountNet),
+      line("debit", "1795", discountTax),
+      line("credit", "1400", amount.gross)
+    ]
+  };
+}
+
+function marginTaxSale({ item, stock, vak, revenue, minCost, maxCost, step, marginRate, cash = false }) {
+  const cost = randomAmount(minCost, maxCost, step);
+  const marginGross = money(cost * marginRate);
+  const taxOnMargin = money(marginGross * VAT_RATE / (1 + VAT_RATE));
+  const sellingPrice = money(cost + marginGross);
+  const extraRevenue = money(marginGross - taxOnMargin);
+
+  return {
+    text: `${cash ? "Barverkauf" : "Verkauf auf Ziel"}: ${item} wird differenzbesteuert verkauft. Einkaufspreis und Buchwert des Fahrzeugs: ${formatAmount(cost)} EUR. Verkaufspreis: ${formatAmount(sellingPrice)} EUR. Die Umsatzsteuer ist nur aus der Differenz zwischen Verkaufspreis und Einkaufspreis zu berechnen.`,
+    hint: "Bei der Differenzbesteuerung wird die Umsatzsteuer nur aus der Handelsspanne berechnet. Der Verkauf wird auf Erlöse GW differenzbesteuert, Mehrerlöse Differenzbesteuerung und Umsatzsteuer aufgeteilt. Danach wird der Bestand über VAK an Bestand ausgebucht.",
+    bookings: [
+      {
+        title: "1. Buchungssatz: Verkauf differenzbesteuert",
+        solution: [
+          line("debit", cash ? "1000" : "1400", sellingPrice),
+          line("credit", revenue, cost),
+          line("credit", "8111", extraRevenue),
+          line("credit", "1795", taxOnMargin)
+        ]
+      },
+      {
+        title: "2. Buchungssatz: Lagerentnahme / Wareneinsatz aus dem Bestand buchen",
+        solution: [
+          line("debit", vak, cost),
+          line("credit", stock, cost)
+        ]
+      }
+    ]
+  };
+}
+
+function marginTaxPurchase({ item, stock, min, max, step, payment }) {
+  const amount = randomAmount(min, max, step);
+  const creditAccount = payment === "cash"
+    ? "1000"
+    : payment === "bank"
+      ? "1200"
+      : "1600";
+  const paymentText = payment === "cash"
+    ? "bar"
+    : payment === "bank"
+      ? "per Banküberweisung"
+      : "auf Ziel";
+
+  return {
+    text: `Wir kaufen von einer Privatkundin bzw. einem Privatkunden ${item} differenzbesteuert ${paymentText} an. Kaufpreis: ${formatAmount(amount)} EUR. Es fällt keine Vorsteuer an.`,
+    hint: "Beim Ankauf von privat gibt es keine Vorsteuer. Der differenzbesteuerte Bestand wird im Soll gebucht; je nach Zahlungsart steht Kasse, Bank oder Verbindlichkeiten im Haben.",
+    solution: [
+      line("debit", stock, amount),
+      line("credit", creditAccount, amount)
+    ]
+  };
+}
+
+function exchangePartSale({ item, partNet, laborNet, stockValue }) {
+  const normalVat = vat(money(partNet + laborNet));
+  const exchangeValue = money(partNet * 0.1);
+  const exchangePartVat = vat(exchangeValue);
+  const receivable = money(partNet + laborNet + normalVat + exchangePartVat);
+
+  return {
+    text: `Verkauf auf Ziel: ${item} wird durch die Werkstatt eingebaut. Teilewert ${formatAmount(partNet)} EUR netto, Lohnanteil ${formatAmount(laborNet)} EUR netto. Zusätzlich ist Umsatzsteuer auf Tauschteile zu buchen: 10 % des Teileerlöses dienen als Bemessungsgrundlage. Der Bestand wird mit ${formatAmount(stockValue)} EUR ausgebucht.`,
+    hint: "Beim Verkauf von Tauschteilen über die Werkstatt werden Teileerlös, Lohnerlös, normale Umsatzsteuer und Umsatzsteuer auf Tauschteile getrennt gebucht. Die Umsatzsteuer auf Tauschteile beträgt 19 % von 10 % des Teileerlöses. Danach folgt die Lagerentnahme: VAK Teile Werkstatt an Bestand Teile.",
+    bookings: [
+      {
+        title: "1. Buchungssatz: Verkauf Tauschteil",
+        solution: [
+          line("debit", "1400", receivable),
+          line("credit", "8310", partNet),
+          line("credit", "8500", laborNet),
+          line("credit", "1795", normalVat),
+          line("credit", "1796", exchangePartVat)
+        ]
+      },
+      {
+        title: "2. Buchungssatz: Lagerentnahme / Wareneinsatz aus dem Bestand buchen",
+        solution: [
+          line("debit", "7310", stockValue),
+          line("credit", "3300", stockValue)
+        ]
+      }
     ]
   };
 }
@@ -523,6 +715,82 @@ function randomPartsPurchase() {
 
 function randomSolarPurchase() {
   return purchaseToStock({ item: "Solaranlagen", stock: "3400", min: 4500, max: 24000, step: 250 });
+}
+
+function randomPurchaseDiscountPayment() {
+  const cases = [
+    { item: "Ersatzteile", stock: "3300", min: 1200, max: 9800, step: 100 },
+    { item: "Wallboxen", stock: "3250", min: 900, max: 4200, step: 100 },
+    { item: "E-Bikes", stock: "3200", min: 1800, max: 12500, step: 100 },
+    { item: "Solaranlagen", stock: "3400", min: 6500, max: 36000, step: 250 },
+    { item: "einen Neuwagen", stock: "3000", min: 24500, max: 65000, step: 500 },
+    { item: "einen regelbesteuerten Gebrauchtwagen", stock: "3100", min: 8500, max: 32000, step: 500 }
+  ];
+  return purchaseDiscountPayment({
+    ...pick(cases),
+    discountRate: pick([0.02, 0.03])
+  });
+}
+
+function randomSalesDiscountPayment() {
+  const cases = [
+    { item: "Ersatzteile an der Theke", revenue: "8300", min: 450, max: 6800, step: 50 },
+    { item: "Wallboxen", revenue: "8250", min: 900, max: 5200, step: 100 },
+    { item: "E-Bikes", revenue: "8200", min: 1800, max: 12500, step: 100 },
+    { item: "eine Solaranlage", revenue: "8400", min: 6500, max: 36000, step: 250 },
+    { item: "einen Neuwagen", revenue: "8000", min: 24500, max: 69000, step: 500 },
+    { item: "einen regelbesteuerten Gebrauchtwagen", revenue: "8050", min: 8500, max: 36500, step: 500 },
+    { item: "eine Werkstattleistung", revenue: "8500", min: 450, max: 3800, step: 50 }
+  ];
+  return salesDiscountPayment({
+    ...pick(cases),
+    discountRate: pick([0.02, 0.03])
+  });
+}
+
+function randomMarginTaxUsedCarSale() {
+  return marginTaxSale({
+    item: "ein gebrauchter Pkw",
+    stock: "3110",
+    vak: "7110",
+    revenue: "8110",
+    minCost: 4500,
+    maxCost: 28000,
+    step: 500,
+    marginRate: pick([0.12, 0.15, 0.18, 0.2, 0.25]),
+    cash: false
+  });
+}
+
+function randomMarginTaxUsedCarPurchase() {
+  return marginTaxPurchase({
+    item: "einen gebrauchten Pkw",
+    stock: "3110",
+    min: 3500,
+    max: 26000,
+    step: 500,
+    payment: pick(["cash", "bank", "target"])
+  });
+}
+
+function randomExchangePartSale() {
+  const cases = [
+    { item: "ein aufbereiteter Austauschmotor", partMin: 1800, partMax: 5200, laborMin: 450, laborMax: 1600, costRate: 0.64 },
+    { item: "ein aufbereitetes Austauschgetriebe", partMin: 1400, partMax: 4200, laborMin: 420, laborMax: 1400, costRate: 0.62 },
+    { item: "ein aufbereiteter Turbolader als Tauschteil", partMin: 650, partMax: 2100, laborMin: 220, laborMax: 820, costRate: 0.6 },
+    { item: "eine aufbereitete Lichtmaschine als Tauschteil", partMin: 280, partMax: 980, laborMin: 120, laborMax: 420, costRate: 0.58 }
+  ];
+  const selected = pick(cases);
+  const partNet = randomAmount(selected.partMin, selected.partMax, 50);
+  const laborNet = randomAmount(selected.laborMin, selected.laborMax, 20);
+  const stockValue = money(partNet * selected.costRate);
+
+  return exchangePartSale({
+    item: selected.item,
+    partNet,
+    laborNet,
+    stockValue
+  });
 }
 
 function randomOfficeSupplies() {
@@ -701,12 +969,32 @@ function extractAccountCode(value) {
 }
 
 function parseAmount(value) {
-  const normalized = String(value || "")
-    .replace(/\s/g, "")
-    .replace(/\./g, "")
-    .replace(",", ".");
+  const raw = String(value || "")
+    .trim()
+    .replace(/[€\s']/g, "");
+  if (!raw) {
+    return null;
+  }
+
+  let normalized = raw;
+  if (normalized.includes(",")) {
+    normalized = normalized.replace(/\./g, "").replace(",", ".");
+  } else if (normalized.includes(".")) {
+    const parts = normalized.split(".");
+    const lastPart = parts[parts.length - 1];
+    normalized = parts.length === 2 && lastPart.length <= 2
+      ? normalized
+      : normalized.replace(/\./g, "");
+  }
+
+  if (!normalized) {
+    return null;
+  }
+  if (!/^-?\d+(\.\d+)?$/.test(normalized)) {
+    return null;
+  }
   const amount = Number.parseFloat(normalized);
-  return Number.isFinite(amount) ? amount : 0;
+  return Number.isFinite(amount) ? amount : null;
 }
 
 function formatAmount(value) {
@@ -716,10 +1004,25 @@ function formatAmount(value) {
   });
 }
 
+function formatPercent(value) {
+  return Number(value * 100).toLocaleString("de-DE", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  }) + " %";
+}
+
 function sumBySide(lines, side) {
   return lines
     .filter((entry) => entry.side === side)
-    .reduce((sum, entry) => sum + entry.amount, 0);
+    .reduce((sum, entry) => sum + (entry.amount || 0), 0);
+}
+
+function amountsEqual(left, right) {
+  if (left === null || right === null) {
+    return false;
+  }
+  return Math.round(Number(left) * 100) === Math.round(Number(right) * 100);
 }
 
 init();
+

@@ -59,6 +59,32 @@ button {
   line-height: 1.05;
 }
 
+.module-switcher {
+  width: calc(100% - 112px);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 auto 12px;
+}
+
+.module-button {
+  flex: 1 1 150px;
+  min-height: 42px;
+  border: 1px solid #b8c7bd;
+  border-radius: 6px;
+  padding: 8px 18px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.module-button.active {
+  border-color: var(--bar);
+  background: var(--bar);
+  color: #ffffff;
+}
+
 .trainer-panel {
   width: calc(100% - 112px);
   margin: 0 auto;
@@ -119,6 +145,13 @@ h3 {
 
 .journal-section {
   margin-top: 8px;
+}
+
+.entry-note {
+  margin: 8px 0 14px;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1.35;
 }
 
 .booking-form {
@@ -319,6 +352,7 @@ h3 {
 
 @media (max-width: 980px) {
   .hero-bar,
+  .module-switcher,
   .trainer-panel {
     width: calc(100% - 32px);
   }
@@ -352,6 +386,14 @@ h3 {
   .hero-bar {
     padding: 12px;
     font-size: 21px;
+  }
+
+  .module-switcher {
+    justify-content: stretch;
+  }
+
+  .module-button {
+    flex: 1 1 140px;
   }
 
   .trainer-panel {
