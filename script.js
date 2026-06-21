@@ -56,10 +56,15 @@ const state = {
   currentTask: null,
   currentModule: "standard",
   checkedCurrentTask: false,
+  currentTaskUsedHint: false,
+  currentTaskViewedSolution: false,
   stats: {
     checked: 0,
-    right: 0,
-    wrong: 0
+    independentRight: 0,
+    assistedRight: 0,
+    wrong: 0,
+    hintUses: 0,
+    solutionViews: 0
   }
 };
 
@@ -78,8 +83,11 @@ const els = {
   hintButton: document.querySelector("#hintButton"),
   feedback: document.querySelector("#feedback"),
   taskCount: document.querySelector("#taskCount"),
-  rightCount: document.querySelector("#rightCount"),
-  wrongCount: document.querySelector("#wrongCount")
+  independentRightCount: document.querySelector("#independentRightCount"),
+  assistedRightCount: document.querySelector("#assistedRightCount"),
+  wrongCount: document.querySelector("#wrongCount"),
+  hintUseCount: document.querySelector("#hintUseCount"),
+  solutionViewCount: document.querySelector("#solutionViewCount")
 };
 
 const randomTaskTemplates = [
@@ -168,8 +176,11 @@ function setModule(moduleName) {
   state.taskNumber = 0;
   state.stats = {
     checked: 0,
-    right: 0,
-    wrong: 0
+    independentRight: 0,
+    assistedRight: 0,
+    wrong: 0,
+    hintUses: 0,
+    solutionViews: 0
   };
   els.moduleButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.module === state.currentModule);
@@ -185,6 +196,8 @@ function currentModuleConfig() {
 function showNextTask() {
   state.taskNumber += 1;
   state.checkedCurrentTask = false;
+  state.currentTaskUsedHint = false;
+  state.currentTaskViewedSolution = false;
   state.currentTask = createRandomTask();
   els.taskMeta.textContent = `${currentModuleConfig().label} · Aufgabe ${state.taskNumber}`;
   els.taskText.textContent = state.currentTask.text;
@@ -290,10 +303,14 @@ function checkAnswer() {
 
   if (errors.length === 0) {
     if (shouldCount) {
-      state.stats.right += 1;
+      if (isCurrentTaskAssisted()) {
+        state.stats.assistedRight += 1;
+      } else {
+        state.stats.independentRight += 1;
+      }
     }
     updateStats();
-    showFeedback("Richtig", shouldCount ? "Der Buchungssatz stimmt." : "Der Buchungssatz stimmt. Die Statistik wurde nicht erneut gezählt.", "ok");
+    showFeedback("Richtig", successFeedbackText(shouldCount), "ok");
     return;
   }
 
@@ -377,6 +394,7 @@ function normalizeEntry(entry) {
 }
 
 function showSolution() {
+  markSolutionViewed();
   resetBookingLines();
   getTaskBookings().forEach((booking, groupIndex) => {
     const group = els.bookingGroups.querySelector(`.booking-group[data-group="${groupIndex}"]`);
@@ -407,7 +425,11 @@ function solutionMarkup(bookings) {
 }
 
 function toggleHint() {
+  const willShowHint = els.hintBox.hidden;
   els.hintBox.hidden = !els.hintBox.hidden;
+  if (willShowHint) {
+    markHintUsed();
+  }
 }
 
 function showFeedback(title, body, type, isHtml = false) {
@@ -422,8 +444,41 @@ function hideFeedback() {
 
 function updateStats() {
   els.taskCount.textContent = state.stats.checked;
-  els.rightCount.textContent = state.stats.right;
+  els.independentRightCount.textContent = state.stats.independentRight;
+  els.assistedRightCount.textContent = state.stats.assistedRight;
   els.wrongCount.textContent = state.stats.wrong;
+  els.hintUseCount.textContent = state.stats.hintUses;
+  els.solutionViewCount.textContent = state.stats.solutionViews;
+}
+
+function markHintUsed() {
+  if (!state.currentTaskUsedHint) {
+    state.currentTaskUsedHint = true;
+    state.stats.hintUses += 1;
+    updateStats();
+  }
+}
+
+function markSolutionViewed() {
+  if (!state.currentTaskViewedSolution) {
+    state.currentTaskViewedSolution = true;
+    state.stats.solutionViews += 1;
+    updateStats();
+  }
+}
+
+function isCurrentTaskAssisted() {
+  return state.currentTaskUsedHint || state.currentTaskViewedSolution;
+}
+
+function successFeedbackText(shouldCount) {
+  if (!shouldCount) {
+    return "Der Buchungssatz stimmt. Die Statistik wurde nicht erneut gezählt.";
+  }
+  if (isCurrentTaskAssisted()) {
+    return "Der Buchungssatz stimmt. Weil Tipp oder Lösung genutzt wurde, zählt diese Aufgabe nicht als selbstständig richtig.";
+  }
+  return "Der Buchungssatz stimmt. Diese Aufgabe zählt als selbstständig richtig.";
 }
 
 function getTaskBookings() {

@@ -11,14 +11,16 @@ function fixedCheckAnswer() {
 
   if (errors.length === 0) {
     if (shouldCount) {
-      state.stats.right += 1;
+      if (isCurrentTaskAssisted()) {
+        state.stats.assistedRight += 1;
+      } else {
+        state.stats.independentRight += 1;
+      }
     }
     updateStats();
     showFeedback(
       "Richtig",
-      shouldCount
-        ? "Der Buchungssatz stimmt."
-        : "Der Buchungssatz stimmt. Die Statistik wurde nicht erneut gezählt.",
+      successFeedbackText(shouldCount),
       "ok"
     );
     return;

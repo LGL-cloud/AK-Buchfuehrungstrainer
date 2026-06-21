@@ -342,12 +342,28 @@ h3 {
   color: #5a5a5a;
 }
 
+.stats-note {
+  flex: 1 1 100%;
+  text-align: center;
+  font-size: 17px;
+  line-height: 1.35;
+}
+
 #wrongCount {
   color: var(--red);
 }
 
-#rightCount {
+#independentRightCount {
   color: var(--green);
+}
+
+#assistedRightCount {
+  color: var(--blue);
+}
+
+#hintUseCount,
+#solutionViewCount {
+  color: var(--warm);
 }
 
 @media (max-width: 980px) {
